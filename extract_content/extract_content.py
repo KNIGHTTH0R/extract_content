@@ -3,6 +3,7 @@ import collections
 import urllib.request
 import random
 from urllib.parse import urlparse
+from urllib.parse import urljoin
 from lxml import etree
 import re
 
@@ -30,23 +31,65 @@ class ExtractContent(object):
         code_detect = chardet.detect(result)['encoding']
         # print(code_detect)
         if code_detect:
-            return result.decode(code_detect, 'ignore')
+            html = result.decode(code_detect, 'ignore')
         else:
-            return result.decode("utf-8", 'ignore')
-
-    def line_html(self,html):
-        """
-
-        :type html: text
-        """
+            html = result.decode("utf-8", 'ignore')
+        return html
+    def get_title(self, html):
         selector = etree.HTML(html)
         title = selector.xpath('//title/text()')
         if title:
             title = title[0].strip()
         else:
             title = ""
+        return title
+    def get_next_url(self,html):
+        next_url_tag = False
+        next_url = []
+        selector = etree.HTML(html)
+        url_nodes = selector.xpath("//a")
+        for url_node in url_nodes:
+            text = url_node.xpath('./text()')
+            if text:
+                tmp_text = text[0].replace(" ", "").replace("\t", "")
+                if tmp_text == "下一页":
+                    next_url_tag = True
+                    next_url = url_node.xpath('./@href')
+                if next_url_tag:
+                    break
+        if next_url:
+                if "javascript" in next_url[0]:
+                    return False, None
+                else:
+                    return next_url_tag, urljoin(url,next_url[0])
+        return next_url_tag, None
+
+    def replace_char_entity(self, htmlstr):
+        CHAR_ENTITIES = {'nbsp': ' ', '160': ' ',
+                         'lt': '<', '60': '<',
+                         'gt': '>', '62': '>',
+                         'amp': '&', '38': '&',
+                         'quot': '"', '34': '"', }
+        re_charEntity = re.compile(r'&#?(?P<name>\w+);')
+        sz = re_charEntity.search(htmlstr)
+        while sz:
+            entity = sz.group()
+            key = sz.group('name')
+            try:
+                htmlstr = re_charEntity.sub(CHAR_ENTITIES[key], htmlstr, 1)
+                sz = re_charEntity.search(htmlstr)
+            except KeyError:
+                # 以空串代替
+                htmlstr = re_charEntity.sub('', htmlstr, 1)
+                sz = re_charEntity.search(htmlstr)
+        return htmlstr
+    def line_html(self,html):
+        """
+
+        :type html: text
+        """
         html = re.sub("</?div.*?>|</?table.*?>", "</div><div>", html)
-        return title, html
+        return html
 
     # 过滤噪声标签
     def fiter_html(self,html):
@@ -208,25 +251,64 @@ class ExtractContent(object):
     # 正文脉络集合,吸收伪噪声段落集,生成正文
     def run(self,url):
         body = {}
-        content = ''
+        contents = []
         html = self.get_html(url)
-        # print(html)
-        title,html = self.line_html(html)
-        html = self.fiter_html(html)
-        para1_dcit, para2_dict = self.extract_paragraph(html)
-        skeleton_dict = {}
-        if para1_dcit:
-            index, feature = self.extract_feature(para1_dcit)
-            skeleton_dict = self.gen_skeleton(para1_dcit, index, feature)
-        if para2_dict and skeleton_dict:
-            content = self.absorb_text(skeleton_dict, para2_dict)
+        title = self.get_title(html)
+        next_urls = []
+        next_urls.append(url)
+        index = 0
+        while True:
+            index += 1
+            if index > 10:
+                break
+            tag , next_url = self.get_next_url(html)
+            # print(next_url)
+            if next_url == next_urls[-1]:
+                break
+            else:
+                next_urls.append(next_url)
+            html = self.line_html(html)
+            html = self.fiter_html(html)
+            html = self.replace_char_entity(html)
+            para1_dcit, para2_dict = self.extract_paragraph(html)
+            skeleton_dict = {}
+            if para1_dcit:
+                index, feature = self.extract_feature(para1_dcit)
+                skeleton_dict = self.gen_skeleton(para1_dcit, index, feature)
+            if para2_dict and skeleton_dict:
+                contents.append(self.absorb_text(skeleton_dict, para2_dict))
+            if not tag:
+                break
+            try:
+                html = self.get_html(next_url)
+            except:
+                print("error")
+                break
 
-        print(content)
+        content = "\n".join(contents)
+
+
+
+
         body["title"] = title
         body["content"] = content
         return body
 if __name__ == "__main__":
     spider = ExtractContent()
     url = "http://news.xinhuanet.com/world/2017-05/04/c_129588259.htm"
-    url = "http://www.cankaoxiaoxi.com/roll10/bd/20170505/1963802.shtml"
-    spider.run(url)
+    # url = "http://www.cankaoxiaoxi.com/roll10/bd/20170505/1963802.shtml"
+    # url = "http://society.huanqiu.com/article/2017-05/10616083.html?from=bdwz"
+    # url = "http://xinwen.eastday.com/a/n170508065403913.html"
+    url = "http://news.china.com/domestic/945/20170508/30497892.html"
+    url = "http://news.china.com/domestic/945/20170508/30500647.html"
+    url = "http://www.cankaoxiaoxi.com/roll10/bd/20170508/1971194.shtml"
+    url = "http://xinwen.eastday.com/a/n170508122355025.html"
+    url = "http://news.ifeng.com/a/20170508/51059222_0.shtml?_zbs_baidu_news"
+    url = "http://www.cankaoxiaoxi.com/roll10/bd/20170508/1969781.shtml"
+    url = "http://news.cnstock.com/news,bwkx-201705-4073723.htm"
+    body = spider.run(url)
+    print(body["title"])
+    print(body["content"])
+    # for each in re.findall('<a.*?下一页</a>',html):
+
+    # print(html)
