@@ -103,7 +103,7 @@ class ExtractContent(object):
         # re_form = re.compile('<form[^>]*?>.*?</\s*form\s*>', re.S | re.I)
         re_blank = re.compile('\n+')  # 空行
         re_br = re.compile('<br\s*?/?>')  # 处理换行
-        re_para = re.compile('</p>')
+        re_para = re.compile('</p>', re.I)
         html = re.sub(re_meta, "", html)
         html = re.sub(re_comment, "", html)
         html = re.sub(re_link, "", html)
@@ -308,7 +308,9 @@ if __name__ == "__main__":
     url = "http://news.ifeng.com/a/20170508/51059222_0.shtml?_zbs_baidu_news"
     url = "http://www.cankaoxiaoxi.com/roll10/bd/20170508/1969781.shtml"
     url = "http://news.cnstock.com/news,bwkx-201705-4073723.htm"
+    url = "http://finance.ifeng.com/a/20150703/13815044_0.shtml"
     # url = "http://edition.cnn.com/2016/07/01/asia/taiwan-fires-missile-on-china/index.html"
+    url = "http://finance.qq.com/a/20141117/037742.htm"
     body = spider.run(url)
     print(body["title"])
     print(body["content"])
