@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from urllib.parse import urljoin
 from lxml import etree
 import re
+import codecs
 
 
 class ExtractContent(object):
@@ -19,7 +20,7 @@ class ExtractContent(object):
                     continue
                 self.user_agents.append(user_agent.strip())
 
-    def get_html(self,url):
+    def get_html(self, url):
         url_parse = urlparse(url)
         headers = {
             "User-Agent": random.choice(self.user_agents),
@@ -35,6 +36,7 @@ class ExtractContent(object):
         else:
             html = result.decode("utf-8", 'ignore')
         return html
+
     def get_title(self, html):
         selector = etree.HTML(html)
         title = selector.xpath('//title/text()')
@@ -43,6 +45,7 @@ class ExtractContent(object):
         else:
             title = ""
         return title
+
     def get_next_url(self,html):
         next_url_tag = False
         next_url = []
@@ -83,6 +86,7 @@ class ExtractContent(object):
                 htmlstr = re_charEntity.sub('', htmlstr, 1)
                 sz = re_charEntity.search(htmlstr)
         return htmlstr
+
     def line_html(self,html):
         """
 
@@ -114,7 +118,7 @@ class ExtractContent(object):
         # html = re.sub(re_form, "", html)
         html = re.sub(re_br, "\n", html)
         html = re.sub(re_blank, "\n", html)
-        html = re.sub(re_para,"\n",html)
+        html = re.sub(re_para, "</p>\n", html)
         return html
 
     # 计算兴趣度
@@ -129,7 +133,7 @@ class ExtractContent(object):
             return num
 
     # 抽取聚类段落集里的特征
-    def extract_feature(self,para_dict):
+    def extract_feature(self, para_dict):
         # print("抽取段落集特征")
         dict_feature = {}
         index, text = max(para_dict.items(), key=lambda asd: asd[1][1])
@@ -143,7 +147,7 @@ class ExtractContent(object):
         return index, feature
 
     # 通过计算兴趣度得分，抽取聚类段落集和吸收段落集
-    def extract_paragraph(self,html):
+    def extract_paragraph(self, html):
         # print(html)
         para1_dict = {}
         para2_dict = {}
@@ -163,7 +167,7 @@ class ExtractContent(object):
         return para1_dict, para2_dict
 
     # 聚类段落集聚类生成生成正文脉络集合
-    def gen_skeleton(self,para_dict,index,feature):
+    def gen_skeleton(self, para_dict, index, feature):
         skeleton_dict = {}
         num_list = []
         # print("聚类段落集聚类生成生成正文脉络集合")
@@ -197,7 +201,7 @@ class ExtractContent(object):
             index = tmp
         return skeleton_dict
 
-    def absorb_text(self,skeleton_dict, para_dict):
+    def absorb_text(self, skeleton_dict, para_dict):
         content_dict = skeleton_dict
         sk_list = skeleton_dict.keys()
         pa_list = para_dict.keys()
@@ -263,7 +267,7 @@ class ExtractContent(object):
             index += 1
             if index > 10:
                 break
-            tag , next_url = self.get_next_url(html)
+            tag, next_url = self.get_next_url(html)
             # print(next_url)
             if next_url == next_urls[-1]:
                 break
@@ -311,6 +315,7 @@ if __name__ == "__main__":
     url = "http://finance.ifeng.com/a/20150703/13815044_0.shtml"
     # url = "http://edition.cnn.com/2016/07/01/asia/taiwan-fires-missile-on-china/index.html"
     url = "http://finance.qq.com/a/20141117/037742.htm"
+    # url = "http://finance.ifeng.com/a/20140607/12495051_0.shtml"
     body = spider.run(url)
     print(body["title"])
     print(body["content"])
