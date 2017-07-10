@@ -1,42 +1,43 @@
 import chardet
-import collections
 import urllib.request
-import random
 from urllib.parse import urlparse
 from urllib.parse import urljoin
 from lxml import etree
+from fake_useragent import UserAgent
 import re
-import codecs
 
 
 class ExtractContent(object):
+
     def __init__(self):
         self.score = 5
-        self.leng = 5
-        self.user_agents = []
-        with open("user_agent.txt") as fp:
-            for user_agent in fp:
-                if len(user_agent.strip()) == 0:
-                    continue
-                self.user_agents.append(user_agent.strip())
+        self.length = 5
+        self.ua = UserAgent()
+        self.ua_type = 'random'
 
+    # 获得html响应
     def get_html(self, url):
         url_parse = urlparse(url)
+
+        # 获得uaer_agent
+        def get_ua():
+            return getattr(self.ua, self.ua_type)
+
         headers = {
-            "User-Agent": random.choice(self.user_agents),
+            "User-Agent": get_ua(),
             "Referer": "{}://{}".format(url_parse.scheme, url_parse.netloc),
         }
         request = urllib.request.Request(url=url, headers=headers)
         response = urllib.request.urlopen(request)
         result = response.read()
         code_detect = chardet.detect(result)['encoding']
-        # print(code_detect)
         if code_detect:
             html = result.decode(code_detect, 'ignore')
         else:
             html = result.decode("utf-8", 'ignore')
         return html
 
+    # 获得新闻的标题
     def get_title(self, html):
         selector = etree.HTML(html)
         title = selector.xpath('//title/text()')
@@ -46,7 +47,8 @@ class ExtractContent(object):
             title = ""
         return title
 
-    def get_next_url(self,html):
+    # 获得下一页链接
+    def get_next_url(self, html):
         next_url_tag = False
         next_url = []
         selector = etree.HTML(html)
@@ -64,15 +66,20 @@ class ExtractContent(object):
                 if "javascript" in next_url[0]:
                     return False, None
                 else:
-                    return next_url_tag, urljoin(url,next_url[0])
+                    return next_url_tag, urljoin(url, next_url[0])
         return next_url_tag, None
 
     def replace_char_entity(self, htmlstr):
-        CHAR_ENTITIES = {'nbsp': ' ', '160': ' ',
-                         'lt': '<', '60': '<',
-                         'gt': '>', '62': '>',
-                         'amp': '&', '38': '&',
-                         'quot': '"', '34': '"', }
+        CHAR_ENTITIES = {'nbsp': ' ',
+                         '160': ' ',
+                         'lt': '<',
+                         '60': '<',
+                         'gt': '>',
+                         '62': '>',
+                         'amp': '&',
+                         '38': '&',
+                         'quot': '"',
+                         '34': '"', }
         re_charEntity = re.compile(r'&#?(?P<name>\w+);')
         sz = re_charEntity.search(htmlstr)
         while sz:
@@ -87,16 +94,13 @@ class ExtractContent(object):
                 sz = re_charEntity.search(htmlstr)
         return htmlstr
 
-    def line_html(self,html):
-        """
-
-        :type html: text
-        """
+    # html线性重构
+    def line_html(self, html):
         html = re.sub("</?div.*?>|</?table.*?>", "</div><div>", html)
         return html
 
     # 过滤噪声标签
-    def fiter_html(self,html):
+    def fiter_html(self, html):
         re_meta = re.compile("<meta.*?/?\s*?>", re.I)  # meta
         re_comment = re.compile("<!--[^>]*-->", re.I)  # HTML注释
         re_link = re.compile("<link.*?/?\s*?>", re.I)  # link
@@ -108,6 +112,7 @@ class ExtractContent(object):
         re_blank = re.compile('\n+')  # 空行
         re_br = re.compile('<br\s*?/?>')  # 处理换行
         re_para = re.compile('</p>', re.I)
+        re_span = re.compile('<span[^>]*?>')
         html = re.sub(re_meta, "", html)
         html = re.sub(re_comment, "", html)
         html = re.sub(re_link, "", html)
@@ -119,6 +124,7 @@ class ExtractContent(object):
         html = re.sub(re_br, "\n", html)
         html = re.sub(re_blank, "\n", html)
         html = re.sub(re_para, "</p>\n", html)
+        html = re.sub(re_span, '', html)
         return html
 
     # 计算兴趣度
@@ -182,8 +188,8 @@ class ExtractContent(object):
         # 向后聚类
         while l_list:
             tmp = l_list.pop(0)
-            leng = abs(tmp - index)
-            if leng < self.leng:
+            length = abs(tmp - index)
+            if length < self.length:
                 if re.match(".*?{0}".format(feature), para_dict[tmp][0], re.S):
                     skeleton_dict[tmp] = para_dict[tmp]
                     # print("向后聚类段落")
@@ -192,8 +198,8 @@ class ExtractContent(object):
         # 向前聚类
         while f_list:
             tmp = f_list.pop()
-            leng = abs(index - tmp)
-            if leng < self.leng:
+            length = abs(index - tmp)
+            if length < self.length:
                 if re.match(".*?{0}".format(feature), para_dict[tmp][0], re.S):
                     skeleton_dict[tmp] = para_dict[tmp]
                     # print("向前聚类段落")
@@ -223,19 +229,17 @@ class ExtractContent(object):
         while pa1_list:
             tmp = pa1_list.pop()
             index = sk_list[0]
-            if abs(tmp - index) < self.leng:
+            if abs(tmp - index) < self.length:
                 if para_dict[tmp][1] * 2 > self.score:
                     content_dict[tmp] = para_dict[tmp]
-                index = tmp
             else:
                 break
         while pa3_list:
             tmp = pa3_list.pop(0)
             index = sk_list[-1]
-            if abs(tmp - index) < self.leng:
+            if abs(tmp - index) < self.length:
                 if para_dict[tmp][1] * 2 > self.score:
                     content_dict[tmp] = para_dict[tmp]
-                index = tmp
             else:
                 break
         while pa2_list:
@@ -255,7 +259,7 @@ class ExtractContent(object):
         return text
 
     # 正文脉络集合,吸收伪噪声段落集,生成正文
-    def run(self,url):
+    def run(self, url):
         body = {}
         contents = []
         html = self.get_html(url)
@@ -292,13 +296,10 @@ class ExtractContent(object):
                 break
 
         content = "\n".join(contents)
-
-
-
-
         body["title"] = title
         body["content"] = content
         return body
+
 if __name__ == "__main__":
     spider = ExtractContent()
     url = "http://news.xinhuanet.com/world/2017-05/04/c_129588259.htm"
@@ -313,9 +314,10 @@ if __name__ == "__main__":
     url = "http://www.cankaoxiaoxi.com/roll10/bd/20170508/1969781.shtml"
     url = "http://news.cnstock.com/news,bwkx-201705-4073723.htm"
     url = "http://finance.ifeng.com/a/20150703/13815044_0.shtml"
-    # url = "http://edition.cnn.com/2016/07/01/asia/taiwan-fires-missile-on-china/index.html"
-    url = "http://finance.qq.com/a/20141117/037742.htm"
-    # url = "http://finance.ifeng.com/a/20140607/12495051_0.shtml"
+    url = 'http://hk.jrj.com.cn/2017/06/30105722678655.shtml'
+    url = 'http://finance.jrj.com.cn/biz/2017/07/02090922684358.shtml'
+    url = 'http://hk.jrj.com.cn/2017/07/04095922693347.shtml'
+
     body = spider.run(url)
     print(body["title"])
     print(body["content"])
