@@ -317,7 +317,10 @@ if __name__ == "__main__":
     url = 'http://hk.jrj.com.cn/2017/06/30105722678655.shtml'
     url = 'http://finance.jrj.com.cn/biz/2017/07/02090922684358.shtml'
     url = 'http://hk.jrj.com.cn/2017/07/04095922693347.shtml'
-
+    url = 'http://news.xinhuanet.com/politics/2017-07/09/c_1121289651.htm'
+    url = 'http://www.cankaoxiaoxi.com/roll10/bd/20170710/2177265.shtml'
+    url = 'http://www.cankaoxiaoxi.com/roll10/bd/20170710/2177017.shtml'
+    url = "http://news.china.com/domestic/945/20170508/30497892.html"
     body = spider.run(url)
     print(body["title"])
     print(body["content"])
